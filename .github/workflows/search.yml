@@ -53,4 +53,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKE }}
+          OSS_TOKEN: ${{ secrets.OSS_TOKEN }}  # your public_repo token: opens only the PRs you /approve on Telegram
 # schedule registered 2026-11-20
