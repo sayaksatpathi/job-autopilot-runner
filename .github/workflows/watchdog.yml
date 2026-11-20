@@ -20,7 +20,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       STATE_TOKEN: ${{ secrets.STATE_TOKEN }}
-      TG: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TG: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKE }}
       SITE: https://sayaksatpathi.github.io/job-autopilot/
     steps:
       - name: Check and heal search, routine and dashboard
