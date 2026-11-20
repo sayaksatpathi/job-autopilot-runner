@@ -1,0 +1,68 @@
+name: watchdog
+
+# Every 3 hours: keeps the search alive (re-enable, re-run failures up to 3 times, restart stuck or missing
+# runs), checks the Claude routine is still saving results, checks the dashboard, reports on Telegram.
+# Re-enabling both workflows on every run also resets GitHub's 60-day inactivity timer for public repos.
+on:
+  schedule:
+    - cron: "41 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  heal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      STATE_TOKEN: ${{ secrets.STATE_TOKEN }}
+      TG: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      SITE: https://sayaksatpathi.github.io/job-autopilot/
+    steps:
+      - name: Check and heal search, routine and dashboard
+        run: |
+          gh workflow enable search.yml || true; gh workflow enable watchdog.yml || true   # keepalive
+          STATE=$(GH_TOKEN=$STATE_TOKEN gh api "repos/sayaksatpathi/job-autopilot/contents/state.json?ref=claude/job-state" -q .content 2>/dev/null | base64 -d) || STATE=""
+          CHAT=$(echo "$STATE" | jq -r '.kv.telegram_chat // empty' 2>/dev/null)
+          PROBLEM=0
+          tg() { PROBLEM=1; echo "$1"; if [ -n "$CHAT" ] && [ -n "$TG" ]; then curl -s -X POST "https://api.telegram.org/bot$TG/sendMessage" -d chat_id="$CHAT" --data-urlencode text="$1" > /dev/null; fi; }
+          if [ -z "$STATE" ]; then
+            echo "cannot read the private state: STATE_TOKEN missing, expired or without access"
+            exit 1   # no chat id without state; the Claude routine emails you when the search stops
+          fi
+          W=search.yml
+          read -r id status conclusion attempt created < <(gh run list -w "$W" -L 1 --json databaseId,status,conclusion,attempt,createdAt \
+            -q '.[0] | "\(.databaseId) \(.status) \(.conclusion // "none") \(.attempt) \(.createdAt)"')
+          age=$(( ( $(date -u +%s) - $(date -u -d "${created:-1970-01-01}" +%s) ) / 60 ))
+          url="https://github.com/$GH_REPO/actions/runs/$id"
+          echo "search: $status $conclusion attempt=$attempt age=${age}m"
+          if [ "$status" = completed ] && [ "$conclusion" = failure ]; then
+            if [ "$attempt" -lt 3 ]; then
+              gh run rerun "$id" --failed && tg "🛠 Watchdog: job search failed, re-running it (attempt $((attempt+1))/3). $url"
+            else
+              tg "🚨 Watchdog: job search failed 3 times. Ask Claude to look at $url"
+            fi
+          elif [ -n "$id" ] && [ "$status" != completed ] && [ "$age" -gt 30 ]; then
+            gh run cancel "$id"; sleep 10; gh workflow run "$W"; tg "🛠 Watchdog: job search was stuck ${age} min; restarted it."
+          elif [ "$age" -gt 90 ]; then
+            gh workflow run "$W" && tg "🛠 Watchdog: no job search for ${age} min; started one."
+          fi
+          hb=$(echo "$STATE" | jq -r '.kv.claude_heartbeat // empty')
+          if [ -n "$hb" ]; then
+            cage=$(( ( $(date -u +%s) - $(date -u -d "$hb" +%s) ) / 60 ))
+            echo "claude routine last saved ${cage}m ago"
+            if [ "$cage" -gt 180 ]; then
+              tg "🚨 Watchdog: the Claude routine (sends emails, reads replies) has not saved results for ${cage} min. Check https://claude.ai/code/routines"
+            fi
+          fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$SITE")
+          echo "dashboard: $code"
+          if [ "$code" != 200 ]; then tg "🚨 Watchdog: dashboard returned HTTP $code."; fi
+          # once a day (the 20:41 IST check): an all-clear, so silence in Telegram always means something
+          if [ "$PROBLEM" = 0 ] && [ "$(date -u +%H)" = 15 ]; then
+            tg "✅ Daily health check: job search, Claude routine and dashboard all OK."
+          fi

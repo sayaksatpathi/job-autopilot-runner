@@ -1,0 +1,45 @@
+name: search
+
+# Public runner: GitHub Actions minutes are unlimited for public repositories. Everything personal (code
+# config, resumes, state) stays in the PRIVATE repo, read with the STATE_TOKEN secret. Nothing personal is
+# printed to these logs. Only schedule/manual triggers, never pull_request, so forks cannot reach secrets.
+on:
+  schedule:
+    - cron: "22,52 * * * *"   # every 30 min: Telegram commands and relays; the hunt itself runs once a day after 09:00 IST
+  workflow_dispatch:
+
+concurrency:
+  group: job-state
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: sayaksatpathi/job-autopilot
+          token: ${{ secrets.STATE_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          repository: sayaksatpathi/job-autopilot
+          ref: claude/job-state
+          path: state
+          token: ${{ secrets.STATE_TOKEN }}
+      - run: |
+          git -C state config user.name "job-autopilot"
+          git -C state config user.email "job-autopilot@users.noreply.github.com"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q -r requirements.txt
+      - run: python -m tests.selfcheck > /dev/null
+      - name: prepare (stderr kept out of this public log; stage errors are saved in the private state)
+        run: python -m autopilot.cloud prepare 2> err.txt || { tail -1 err.txt | cut -c1-200; exit 1; }
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
