@@ -5,7 +5,8 @@ name: search
 # printed to these logs. Only schedule/manual triggers, never pull_request, so forks cannot reach secrets.
 on:
   schedule:
-    - cron: "22,52 * * * *"   # every 30 min: Telegram commands and relays; the hunt itself runs once a day after 09:00 IST
+    - cron: "22,52 1-18 * * *"   # every 30 min, 06:52-00:52 IST
+    - cron: "52 19-23,0 * * *"     # hourly overnight (saves Actions minutes while you sleep)   # every 30 min: Telegram commands and relays; the hunt itself runs once a day after 09:00 IST
   workflow_dispatch:
 
 concurrency:
