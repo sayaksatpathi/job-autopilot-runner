@@ -25,6 +25,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
+      TG: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKE }}
     steps:
       - name: Keep search and watchdog running
         run: |
@@ -32,13 +33,23 @@ jobs:
             t=$(gh run list -w "$1" -L 1 --json createdAt -q '.[0].createdAt' 2>/dev/null)
             [ -n "$t" ] && echo $(( ( $(date -u +%s) - $(date -u -d "$t" +%s) ) / 60 )) || echo 9999
           }
-          end=$(( $(date -u +%s) + 350*60 ))
+          running() { [ -n "$(gh run list -w search.yml -L 3 --json status -q '.[]|select(.status!="completed")|.status')" ]; }
+          end=$(( $(date -u +%s) + 350*60 )); next=0
           while [ "$(date -u +%s)" -lt "$end" ]; do
-            s=$(age search.yml); w=$(age watchdog.yml)
-            echo "$(date -u +%H:%M) search ${s}m ago, watchdog ${w}m ago"
-            [ "$s" -gt 35 ] && { gh workflow run search.yml && echo "started search"; }
-            [ "$w" -gt 195 ] && { gh workflow run watchdog.yml && echo "started watchdog"; }
-            sleep 600
+            # a Telegram command is waiting: answer within a minute instead of at the next half-hour run.
+            # getUpdates without an offset only peeks; the search run confirms the messages it answers.
+            if [ -n "$TG" ] && ! running; then
+              n=$(curl -s --max-time 20 "https://api.telegram.org/bot$TG/getUpdates?timeout=0&limit=5" | jq '.result | length' 2>/dev/null)
+              if [ "${n:-0}" -gt 0 ]; then gh workflow run search.yml && echo "$(date -u +%H:%M) Telegram message waiting: started search"; sleep 90; fi
+            fi
+            if [ "$(date -u +%s)" -ge "$next" ]; then
+              s=$(age search.yml); w=$(age watchdog.yml)
+              echo "$(date -u +%H:%M) search ${s}m ago, watchdog ${w}m ago"
+              [ "$s" -gt 35 ] && { gh workflow run search.yml && echo "started search"; }
+              [ "$w" -gt 195 ] && { gh workflow run watchdog.yml && echo "started watchdog"; }
+              next=$(( $(date -u +%s) + 600 ))
+            fi
+            sleep 45
           done
       - name: Start the next keeper
         if: always()
