@@ -40,9 +40,10 @@ jobs:
             gh workflow run keeper.yml && tg "🛠 Watchdog: the backup scheduler had stopped; restarted it."
           fi
           W=search.yml
-          read -r id status conclusion attempt created < <(gh run list -w "$W" -L 1 --json databaseId,status,conclusion,attempt,createdAt \
-            -q '.[0] | "\(.databaseId) \(.status) \(.conclusion // "none") \(.attempt) \(.createdAt)"')
-          age=$(( ( $(date -u +%s) - $(date -u -d "${created:-1970-01-01}" +%s) ) / 60 ))
+          # one field per line: an in-progress run has an EMPTY conclusion, which shifted space-separated fields
+          { read -r id; read -r status; read -r conclusion; read -r attempt; read -r created; } < <(
+            gh run list -w "$W" -L 1 --json databaseId,status,conclusion,attempt,createdAt               -q '.[0] | .databaseId, .status, (if (.conclusion // "") == "" then "none" else .conclusion end), .attempt, .createdAt')
+          if [ -z "$created" ]; then age=9999; else age=$(( ( $(date -u +%s) - $(date -u -d "$created" +%s) ) / 60 )); fi
           url="https://github.com/$GH_REPO/actions/runs/$id"
           echo "search: $status $conclusion attempt=$attempt age=${age}m"
           if [ "$status" = completed ] && [ "$conclusion" = failure ]; then
@@ -51,7 +52,7 @@ jobs:
             else
               tg "🚨 Watchdog: job search failed 3 times. Ask Claude to look at $url"
             fi
-          elif [ -n "$id" ] && [ "$status" != completed ] && [ "$age" -gt 30 ]; then
+          elif [ -n "$id" ] && [ "$status" = in_progress ] && [ "$age" -gt 30 ] && [ "$age" -lt 1440 ]; then
             gh run cancel "$id"; sleep 10; gh workflow run "$W"; tg "🛠 Watchdog: job search was stuck ${age} min; restarted it."
           elif [ "$age" -gt 90 ]; then
             gh workflow run "$W" && tg "🛠 Watchdog: no job search for ${age} min; started one."
