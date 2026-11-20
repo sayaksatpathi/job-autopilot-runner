@@ -66,3 +66,4 @@ jobs:
           if [ "$PROBLEM" = 0 ] && [ "$(date -u +%H)" = 15 ]; then
             tg "✅ Daily health check: job search, Claude routine and dashboard all OK."
           fi
+# schedule registered 2026-11-20

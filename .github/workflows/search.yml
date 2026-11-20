@@ -44,3 +44,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKE }}
+# schedule registered 2026-11-20
