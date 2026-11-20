@@ -25,7 +25,7 @@ jobs:
     steps:
       - name: Check and heal search, routine and dashboard
         run: |
-          gh workflow enable search.yml || true; gh workflow enable watchdog.yml || true   # keepalive
+          gh workflow enable search.yml || true; gh workflow enable watchdog.yml || true   # keepalive (resets the 60-day inactivity timer)
           STATE=$(GH_TOKEN=$STATE_TOKEN gh api "repos/sayaksatpathi/job-autopilot/contents/state.json?ref=claude/job-state" -q .content 2>/dev/null | base64 -d) || STATE=""
           CHAT=$(echo "$STATE" | jq -r '.kv.telegram_chat // empty' 2>/dev/null)
           PROBLEM=0
@@ -33,6 +33,11 @@ jobs:
           if [ -z "$STATE" ]; then
             echo "cannot read the private state: STATE_TOKEN missing, expired or without access"
             exit 1   # no chat id without state; the Claude routine emails you when the search stops
+          fi
+          # the keeper (second scheduler) must always be running or queued; restart it if the chain broke
+          gh workflow enable keeper.yml || true
+          if [ -z "$(gh run list -w keeper.yml -L 5 --json status -q '.[]|select(.status!="completed")|.status')" ]; then
+            gh workflow run keeper.yml && tg "🛠 Watchdog: the backup scheduler had stopped; restarted it."
           fi
           W=search.yml
           read -r id status conclusion attempt created < <(gh run list -w "$W" -L 1 --json databaseId,status,conclusion,attempt,createdAt \

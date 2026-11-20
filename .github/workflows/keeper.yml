@@ -1,0 +1,45 @@
+name: keeper
+
+# Second, independent scheduler. GitHub's cron is best-effort (runs can be delayed or dropped for hours),
+# so this job stays alive ~5h50m, starts `search` whenever none ran in the last 35 min and `watchdog`
+# whenever none ran in the last 3h15m, then starts the next keeper before it exits. Cron restarts the
+# keeper if the chain ever breaks, and the watchdog restarts it too: each mechanism revives the other.
+# Public repository: Actions minutes are free. A dispatch made with GITHUB_TOKEN is allowed to start runs.
+on:
+  schedule:
+    - cron: "5 */6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: keeper
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  keep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 358
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Keep search and watchdog running
+        run: |
+          age() {  # minutes since the latest run of a workflow started (9999 if none)
+            t=$(gh run list -w "$1" -L 1 --json createdAt -q '.[0].createdAt' 2>/dev/null)
+            [ -n "$t" ] && echo $(( ( $(date -u +%s) - $(date -u -d "$t" +%s) ) / 60 )) || echo 9999
+          }
+          end=$(( $(date -u +%s) + 350*60 ))
+          while [ "$(date -u +%s)" -lt "$end" ]; do
+            s=$(age search.yml); w=$(age watchdog.yml)
+            echo "$(date -u +%H:%M) search ${s}m ago, watchdog ${w}m ago"
+            [ "$s" -gt 35 ] && { gh workflow run search.yml && echo "started search"; }
+            [ "$w" -gt 195 ] && { gh workflow run watchdog.yml && echo "started watchdog"; }
+            sleep 600
+          done
+      - name: Start the next keeper
+        if: always()
+        run: gh workflow run keeper.yml
