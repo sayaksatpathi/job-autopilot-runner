@@ -52,7 +52,7 @@ jobs:
             else
               tg "🚨 Watchdog: job search failed 3 times. Ask Claude to look at $url"
             fi
-          elif [ -n "$id" ] && [ "$status" = in_progress ] && [ "$age" -gt 30 ] && [ "$age" -lt 1440 ]; then
+          elif [ -n "$id" ] && [ "$status" = in_progress ] && [ "$age" -gt 45 ] && [ "$age" -lt 1440 ]; then
             gh run cancel "$id"; sleep 10; gh workflow run "$W"; tg "🛠 Watchdog: job search was stuck ${age} min; restarted it."
           elif [ "$age" -gt 90 ]; then
             gh workflow run "$W" && tg "🛠 Watchdog: no job search for ${age} min; started one."
