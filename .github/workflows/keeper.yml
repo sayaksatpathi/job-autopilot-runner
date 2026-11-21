@@ -7,7 +7,7 @@ name: keeper
 # Public repository: Actions minutes are free. A dispatch made with GITHUB_TOKEN is allowed to start runs.
 on:
   schedule:
-    - cron: "5 */6 * * *"
+    - cron: "5 2,8,14 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -36,6 +36,8 @@ jobs:
           running() { [ -n "$(gh run list -w search.yml -L 3 --json status -q '.[]|select(.status!="completed")|.status')" ]; }
           end=$(( $(date -u +%s) + 350*60 )); next=0
           while [ "$(date -u +%s)" -lt "$end" ]; do
+            # nights off (23:30-07:30 IST): an always-on bot looks like Actions abuse; hourly cron searches still run
+            h=$((10#$(date -u +%H))); if [ "$h" -ge 18 ] || [ "$h" -lt 2 ]; then echo "night: keeper sleeps until 07:35 IST"; break; fi
             # a Telegram command is waiting: answer within a minute instead of at the next half-hour run.
             # getUpdates without an offset only peeks; the search run confirms the messages it answers.
             if [ -n "$TG" ] && ! running; then
@@ -53,4 +55,6 @@ jobs:
           done
       - name: Start the next keeper
         if: always()
-        run: gh workflow run keeper.yml
+        run: |
+          h=$((10#$(date -u +%H))); if [ "$h" -ge 18 ] || [ "$h" -lt 2 ]; then echo "night: cron restarts the keeper at 02:05 UTC"; exit 0; fi
+          gh workflow run keeper.yml
