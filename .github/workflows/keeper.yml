@@ -2,7 +2,7 @@ name: keeper
 
 # Second, independent scheduler. GitHub's cron is best-effort (runs can be delayed or dropped for hours),
 # so this job stays alive ~5h50m, starts `search` whenever none ran in the last 35 min and `watchdog`
-# whenever none ran in the last 3h15m, then starts the next keeper before it exits. Cron restarts the
+# whenever none ran in the last 75 min, then starts the next keeper before it exits. Cron restarts the
 # keeper if the chain ever breaks, and the watchdog restarts it too: each mechanism revives the other.
 # Public repository: Actions minutes are free. A dispatch made with GITHUB_TOKEN is allowed to start runs.
 on:
@@ -48,7 +48,7 @@ jobs:
               s=$(age search.yml); w=$(age watchdog.yml)
               echo "$(date -u +%H:%M) search ${s}m ago, watchdog ${w}m ago"
               [ "$s" -gt 35 ] && { gh workflow run search.yml && echo "started search"; }
-              [ "$w" -gt 195 ] && { gh workflow run watchdog.yml && echo "started watchdog"; }
+              [ "$w" -gt 75 ] && { gh workflow run watchdog.yml && echo "started watchdog"; }
               next=$(( $(date -u +%s) + 600 ))
             fi
             sleep 45
