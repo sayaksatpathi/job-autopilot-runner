@@ -26,6 +26,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       TG: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKE }}
+      OSS_TG: ${{ secrets.OSS_TELEGRAM_BOT_TOKEN }}
+      LI_TG: ${{ secrets.LINKEDIN_TELEGRAM_BOT_TOKEN }}
     steps:
       - name: Keep search and watchdog running
         run: |
@@ -40,8 +42,11 @@ jobs:
             h=$((10#$(date -u +%H))); if [ "$h" -ge 18 ] || [ "$h" -lt 2 ]; then echo "night: keeper sleeps until 07:35 IST"; break; fi
             # a Telegram command is waiting: answer within a minute instead of at the next half-hour run.
             # getUpdates without an offset only peeks; the search run confirms the messages it answers.
-            if [ -n "$TG" ] && ! running; then
-              n=$(curl -s --max-time 20 "https://api.telegram.org/bot$TG/getUpdates?timeout=0&limit=5" | jq '.result | length' 2>/dev/null)
+            if ! running; then
+              n=0  # the job, OSS Radar and LinkedIn bots: a command in any of them is answered within a minute
+              for t in "$TG" "$OSS_TG" "$LI_TG"; do
+                [ -n "$t" ] && [ "$n" = 0 ] && n=$(curl -s --max-time 20 "https://api.telegram.org/bot$t/getUpdates?timeout=0&limit=5" | jq '.result | length' 2>/dev/null || echo 0)
+              done
               if [ "${n:-0}" -gt 0 ]; then gh workflow run search.yml && echo "$(date -u +%H:%M) Telegram message waiting: started search"; sleep 90; fi
             fi
             if [ "$(date -u +%s)" -ge "$next" ]; then
