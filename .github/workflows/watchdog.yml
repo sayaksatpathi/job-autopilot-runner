@@ -68,8 +68,13 @@ jobs:
           code=$(curl -s -o /dev/null -w '%{http_code}' "$SITE")
           echo "dashboard: $code"
           if [ "$code" != 200 ]; then tg "🚨 Watchdog: dashboard returned HTTP $code."; fi
-          # once a day (the 20:41 IST check): an all-clear, so silence in Telegram always means something
-          if [ "$PROBLEM" = 0 ] && [ "$(date -u +%H)" = 15 ]; then
-            tg "✅ Daily health check: job search, Claude routine and dashboard all OK."
+          # once a day, the first healthy check after 20:30 IST: an all-clear, so silence in Telegram always means
+          # something. Runs drift (cron or keeper), so "first one today after 15:00 UTC" replaces "the 15:xx run".
+          if [ "$PROBLEM" = 0 ] && [ $((10#$(date -u +%H))) -ge 15 ]; then
+            earlier=$(gh run list -w watchdog.yml -L 30 --json databaseId,createdAt,conclusion \
+              -q "[.[] | select(.databaseId != $GITHUB_RUN_ID and .conclusion == \"success\" and .createdAt >= \"$(date -u +%F)T15:00:00Z\")] | length")
+            if [ "${earlier:-0}" = 0 ]; then
+              tg "✅ Daily health check: job search, Claude routine and dashboard all OK."
+            fi
           fi
 # schedule registered 2026-11-20
