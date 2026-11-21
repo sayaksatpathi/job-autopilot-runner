@@ -74,7 +74,8 @@ jobs:
             earlier=$(gh run list -w watchdog.yml -L 30 --json databaseId,createdAt,conclusion \
               -q "[.[] | select(.databaseId != $GITHUB_RUN_ID and .conclusion == \"success\" and .createdAt >= \"$(date -u +%F)T15:00:00Z\")] | length")
             if [ "${earlier:-0}" = 0 ]; then
-              tg "✅ Daily health check: job search, Claude routine and dashboard all OK."
+              LI=$(echo "$STATE" | jq -r '[.li // [] | .[] | .status] | "LinkedIn: \(map(select(.=="draft"))|length) drafts waiting, \(map(select(.=="approved"))|length) approved, \(map(select(.=="posted"))|length) posted"' 2>/dev/null)
+              tg "✅ Daily health check: job search, Claude routine and dashboard all OK. $LI. The fixer routine checks every 6 h."
             fi
           fi
 # schedule registered 2026-11-20
