@@ -1,11 +1,11 @@
 name: watchdog
 
-# Every 3 hours: keeps the search alive (re-enable, re-run failures up to 3 times, restart stuck or missing
+# Every hour: keeps the search alive (re-enable, re-run failures up to 3 times, restart stuck or missing
 # runs), checks the Claude routine is still saving results, checks the dashboard, reports on Telegram.
 # Re-enabling both workflows on every run also resets GitHub's 60-day inactivity timer for public repos.
 on:
   schedule:
-    - cron: "41 */3 * * *"
+    - cron: "41 * * * *"
   workflow_dispatch:
 
 permissions:
