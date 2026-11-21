@@ -54,4 +54,5 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKE }}
           OSS_TOKEN: ${{ secrets.OSS_TOKEN }}  # your public_repo token: opens only the PRs you /approve on Telegram
+          OSS_TELEGRAM_BOT_TOKEN: ${{ secrets.OSS_TELEGRAM_BOT_TOKEN }}  # OSS Radar's own bot, separate from the job bot
 # schedule registered 2026-11-20
