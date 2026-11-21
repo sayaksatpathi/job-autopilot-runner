@@ -61,8 +61,9 @@ jobs:
           if [ -n "$hb" ]; then
             cage=$(( ( $(date -u +%s) - $(date -u -d "$hb" +%s) ) / 60 ))
             echo "claude routine last saved ${cage}m ago"
-            if [ "$cage" -gt 180 ]; then
-              tg "🚨 Watchdog: the Claude routine (sends emails, reads replies) has not saved results for ${cage} min. Check https://claude.ai/code/routines"
+            h=$((10#$(date -u +%H))); lim=180; { [ "$h" -lt 4 ] || [ "$h" -ge 18 ]; } && lim=720   # the routine runs every 2 h, 08:37-22:37 IST
+            if [ "$cage" -gt "$lim" ]; then
+              tg "🚨 Watchdog: the Claude routine (sends emails every 2 h, reads replies) has not saved results for ${cage} min. Check https://claude.ai/code/routines"
             fi
           fi
           code=$(curl -s -o /dev/null -w '%{http_code}' "$SITE")
