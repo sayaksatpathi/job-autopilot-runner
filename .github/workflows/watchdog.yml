@@ -34,9 +34,10 @@ jobs:
             echo "cannot read the private state: STATE_TOKEN missing, expired or without access"
             exit 1   # no chat id without state; the Claude routine emails you when the search stops
           fi
-          # the keeper (second scheduler) must always be running or queued; restart it if the chain broke
+          # the keeper (second scheduler) must be running or queued in the day (02-18 UTC); it sleeps at night by design
           gh workflow enable keeper.yml || true
-          if [ -z "$(gh run list -w keeper.yml -L 5 --json status -q '.[]|select(.status!="completed")|.status')" ]; then
+          h=$((10#$(date -u +%H)))
+          if [ "$h" -ge 2 ] && [ "$h" -lt 18 ] && [ -z "$(gh run list -w keeper.yml -L 5 --json status -q '.[]|select(.status!="completed")|.status')" ]; then
             gh workflow run keeper.yml && tg "🛠 Watchdog: the backup scheduler had stopped; restarted it."
           fi
           W=search.yml
