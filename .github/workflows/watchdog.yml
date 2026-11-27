@@ -47,11 +47,18 @@ jobs:
           if [ -z "$created" ]; then age=9999; else age=$(( ( $(date -u +%s) - $(date -u -d "$created" +%s) ) / 60 )); fi
           url="https://github.com/$GH_REPO/actions/runs/$id"
           echo "search: $status $conclusion attempt=$attempt age=${age}m"
+          # every scheduled run starts at attempt 1, so "attempt" never reached 3: count failed runs in a row instead
+          streak=$(gh run list -w "$W" -L 20 --json status,conclusion -q '[.[] | select(.status=="completed")] | (map(.conclusion != "failure") | index(true)) // length')
+          slot=$(( 10#$(date -u +%H) % 6 == 3 ))   # 03/09/15/21 UTC: a standing outage is repeated 4 times a day, not hourly
+          echo "search failure streak: $streak"
           if [ "$status" = completed ] && [ "$conclusion" = failure ]; then
-            if [ "$attempt" -lt 3 ]; then
-              gh run rerun "$id" --failed && tg "🛠 Watchdog: job search failed, re-running it (attempt $((attempt+1))/3). $url"
-            else
-              tg "🚨 Watchdog: job search failed 3 times. Ask Claude to look at $url"
+            if [ "$streak" -lt 3 ]; then
+              gh run rerun "$id" --failed || true   # a blip: retry quietly
+            elif [ "$streak" = 3 ] || [ "$slot" = 1 ]; then   # the same error every time: re-running is pointless
+              err=$(gh run view "$id" --log-failed 2>/dev/null | cut -f3- | cut -d' ' -f2- | grep -E 'Error|error:|assert' | tail -2 | cut -c1-300)
+              tg "🚨 Job search has failed $streak runs in a row, so nothing runs (search, emails, bots, OSS Radar). Error: ${err:-see the log}
+          $url
+          The fixer routine (every 2 h) is told about it; ask Claude if it is still red in 2 h."
             fi
           elif [ -n "$id" ] && [ "$status" = in_progress ] && [ "$age" -gt 45 ] && [ "$age" -lt 1440 ]; then
             gh run cancel "$id"; sleep 10; gh workflow run "$W"; tg "🛠 Watchdog: job search was stuck ${age} min; restarted it."
@@ -63,7 +70,7 @@ jobs:
             cage=$(( ( $(date -u +%s) - $(date -u -d "$hb" +%s) ) / 60 ))
             echo "claude routine last saved ${cage}m ago"
             h=$((10#$(date -u +%H))); lim=180; { [ "$h" -lt 4 ] || [ "$h" -ge 18 ]; } && lim=720   # the routine runs every 2 h, 08:37-22:37 IST
-            if [ "$cage" -gt "$lim" ]; then
+            if [ "$cage" -gt "$lim" ] && { [ "$cage" -le $((lim+60)) ] || [ "$slot" = 1 ]; }; then   # once, then 4 a day
               tg "🚨 Watchdog: the Claude routine (sends emails every 2 h, reads replies) has not saved results for ${cage} min. Check https://claude.ai/code/routines"
             fi
           fi
